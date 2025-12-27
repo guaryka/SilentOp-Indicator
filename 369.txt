@@ -1,0 +1,104 @@
+// © Guaryka
+//@version=6
+indicator("369", overlay=true, max_labels_count=500)
+
+group_app = "Appearance" 
+group_set = "Settings"
+group_dbg = "Debugging"
+
+time_text_color = input.color(color.red, title="Time Text Color", group=group_app)
+number_color    = input.color(color.lime, title="Number 3-6-9 Color", group=group_app)
+
+show_all_swings = input.bool(false, title="Show Non-369 Swings (Gray)", tooltip="Show all swings in gray to check signals.", group=group_dbg)
+
+keep_minutes    = input.int(10, title="Show Last (Minutes)", minval=1, tooltip="Only show signals within the last X minutes.", group=group_set)
+my_timezone     = input.string("UTC+5", title="Timezone", group=group_set)
+
+calc_digit_sum(n) =>
+    int val = n
+    int sum = 0
+    if val == 0
+        sum := 0
+    else
+        while val > 0
+            sum += val % 10
+            val := math.floor(val / 10)
+    sum
+
+reduce_to_single_digit(n) =>
+    int val = n
+    int max_loop = 10
+    int count = 0
+    while val >= 10 and count < max_loop
+        val := calc_digit_sum(val)
+        count += 1
+    val
+
+is_swing_high = high[1] > high[2] and high[1] > high[0]
+is_swing_low  = low[1] < low[2] and low[1] < low[0]
+is_swing      = is_swing_high or is_swing_low
+
+t = time[1]
+h = hour(t, my_timezone)
+m = minute(t, my_timezone)
+
+raw_min_sum     = calc_digit_sum(m)
+final_min_digit = reduce_to_single_digit(raw_min_sum)
+check_min       = (final_min_digit == 3 or final_min_digit == 6 or final_min_digit == 9)
+
+raw_hour_sum      = calc_digit_sum(h)
+total_sum         = raw_min_sum + raw_hour_sum
+final_total_digit = reduce_to_single_digit(total_sum)
+check_total       = (final_total_digit == 3 or final_total_digit == 6 or final_total_digit == 9)
+
+bool is_valid_369 = false
+int number_369    = na 
+
+if check_min
+    is_valid_369 := true
+    number_369   := final_min_digit
+else if check_total
+    is_valid_369 := true
+    number_369   := final_total_digit
+else
+    is_valid_369 := false
+
+should_draw = (is_swing and is_valid_369) or (is_swing and show_all_swings)
+
+var label[] label_queue = array.new_label()
+var int[]   time_queue  = array.new_int()
+
+if should_draw
+    string str_h = h < 10 ? "0" + str.tostring(h) : str.tostring(h)
+    string str_m = m < 10 ? "0" + str.tostring(m) : str.tostring(m)
+    string current_time_str = str_h + ":" + str_m
+    
+    int display_num = is_valid_369 ? number_369 : (check_min ? final_min_digit : final_total_digit)
+    if na(display_num)
+        int tmp_total = reduce_to_single_digit(calc_digit_sum(m) + calc_digit_sum(h))
+        display_num := tmp_total
+
+    string number_str = str.tostring(display_num)
+    
+    color txt_color_time = is_valid_369 ? time_text_color : color.gray
+    color txt_color_num  = is_valid_369 ? number_color : color.gray
+    
+    label lbl_time = na
+    label lbl_num  = na
+    
+    if is_swing_high
+        lbl_time := label.new(bar_index - 1, high[1], text=current_time_str, color=color.new(color.white, 100), textcolor=txt_color_time, style=label.style_none, yloc=yloc.abovebar, size=size.normal)
+        lbl_num  := label.new(bar_index - 1, high[1], text=number_str, color=color.new(color.white, 100), textcolor=txt_color_num, style=label.style_label_down, yloc=yloc.abovebar, size=size.normal)
+    else
+        lbl_time := label.new(bar_index - 1, low[1], text=current_time_str, color=color.new(color.white, 100), textcolor=txt_color_time, style=label.style_none, yloc=yloc.belowbar, size=size.normal)
+        lbl_num  := label.new(bar_index - 1, low[1], text=number_str, color=color.new(color.white, 100), textcolor=txt_color_num, style=label.style_label_up, yloc=yloc.belowbar, size=size.normal)
+    
+    array.push(label_queue, lbl_time)
+    array.push(label_queue, lbl_num)
+    array.push(time_queue, time[1]) 
+    array.push(time_queue, time[1])
+
+int cutoff_time = time - (keep_minutes * 60 * 1000)
+while array.size(time_queue) > 0 and array.get(time_queue, 0) < cutoff_time
+    label.delete(array.shift(label_queue))
+    array.shift(time_queue)
