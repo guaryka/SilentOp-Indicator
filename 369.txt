@@ -1,18 +1,30 @@
 // © Guaryka
 //@version=6
-indicator("369", overlay=true, max_labels_count=500)
+indicator("SilentOp", overlay=true, max_lines_count=100, max_labels_count=100)
 
-group_app = "Appearance" 
-group_set = "Settings"
-group_dbg = "Debugging"
+grp_369     = "369 Settings"
+enable_369  = input.bool(true, title="Enable 369", group=grp_369)
+c_time      = input.color(color.red,  title="Time Color", group=grp_369)
+c_num       = input.color(color.lime, title="Number Color", group=grp_369)
+keep_mins   = input.int(10,     title="Keep Signals (Minutes)", minval=1, group=grp_369)
+tz_369      = input.string("UTC+5", title="Timezone", group=grp_369)
 
-time_text_color = input.color(color.red, title="Time Text Color", group=group_app)
-number_color    = input.color(color.lime, title="Number 3-6-9 Color", group=group_app)
+grp_nwog    = "NWOG Settings"
+enable_nwog = input.bool(true, title="Enable NWOG", group=grp_nwog)
 
-show_all_swings = input.bool(false, title="Show Non-369 Swings (Gray)", tooltip="Show all swings in gray to check signals.", group=group_dbg)
+nwog_l_col  = input.color(color.gray, title="Line Color", group=grp_nwog)
+nwog_t_col  = input.color(color.gray, title="Text Color", group=grp_nwog)
 
-keep_minutes    = input.int(10, title="Show Last (Minutes)", minval=1, tooltip="Only show signals within the last X minutes.", group=group_set)
-my_timezone     = input.string("UTC+5", title="Timezone", group=group_set)
+nwog_show_ce   = input.bool(true,     title="Show CE (50%)", group=grp_nwog)
+nwog_ce_col    = input.color(color.new(color.gray, 30), title="↳ CE Color", group=grp_nwog)
+nwog_ce_width  = input.int(1,         title="↳ CE Width", minval=1, group=grp_nwog)
+nwog_ce_st_str = input.string("Dashed", title="↳ CE Style", options=["Solid", "Dashed", "Dotted"], group=grp_nwog)
+
+get_line_style(s) =>
+    switch s
+        "Solid"  => line.style_solid
+        "Dotted" => line.style_dotted
+        => line.style_dashed
 
 calc_digit_sum(n) =>
     int val = n
@@ -27,78 +39,131 @@ calc_digit_sum(n) =>
 
 reduce_to_single_digit(n) =>
     int val = n
-    int max_loop = 10
     int count = 0
-    while val >= 10 and count < max_loop
+    while val >= 10 and count < 10
         val := calc_digit_sum(val)
         count += 1
     val
 
-is_swing_high = high[1] > high[2] and high[1] > high[0]
-is_swing_low  = low[1] < low[2] and low[1] < low[0]
-is_swing      = is_swing_high or is_swing_low
+var label[] q_lbl_369  = array.new_label()
+var int[]   q_time_369 = array.new_int()
 
-t = time[1]
-h = hour(t, my_timezone)
-m = minute(t, my_timezone)
+if enable_369
+    is_swing_high = high[1] > high[2] and high[1] > high[0]
+    is_swing_low  = low[1] < low[2] and low[1] < low[0]
+    is_swing      = is_swing_high or is_swing_low
 
-raw_min_sum     = calc_digit_sum(m)
-final_min_digit = reduce_to_single_digit(raw_min_sum)
-check_min       = (final_min_digit == 3 or final_min_digit == 6 or final_min_digit == 9)
+    if is_swing 
+        t = time[1]
+        h = hour(t, tz_369)
+        m = minute(t, tz_369)
 
-raw_hour_sum      = calc_digit_sum(h)
-total_sum         = raw_min_sum + raw_hour_sum
-final_total_digit = reduce_to_single_digit(total_sum)
-check_total       = (final_total_digit == 3 or final_total_digit == 6 or final_total_digit == 9)
+        m_final   = reduce_to_single_digit(calc_digit_sum(m))
+        h_unit    = h % 10
+        h_ten     = math.floor(h / 10)
 
-bool is_valid_369 = false
-int number_369    = na 
+        bool valid_369 = false
+        int  num_369   = na 
 
-if check_min
-    is_valid_369 := true
-    number_369   := final_min_digit
-else if check_total
-    is_valid_369 := true
-    number_369   := final_total_digit
+        if (m_final == 3 or m_final == 6 or m_final == 9)
+            valid_369 := true
+            num_369   := m_final
+        else
+            step2 = reduce_to_single_digit(m_final + h_unit)
+            if (step2 == 3 or step2 == 6 or step2 == 9)
+                valid_369 := true
+                num_369   := step2
+            else
+                step3 = reduce_to_single_digit(m_final + h_unit + h_ten)
+                if (step3 == 3 or step3 == 6 or step3 == 9)
+                    valid_369 := true
+                    num_369   := step3
+
+        if valid_369
+            string str_h = h < 10 ? "0" + str.tostring(h) : str.tostring(h)
+            string str_m = m < 10 ? "0" + str.tostring(m) : str.tostring(m)
+            string time_str = str_h + ":" + str_m
+            string num_str  = str.tostring(num_369)
+            
+            label l_time = na
+            label l_num  = na
+            
+            if is_swing_high
+                l_time := label.new(bar_index - 1, high[1], text=time_str, color=color.new(color.white, 100), textcolor=c_time, style=label.style_none, yloc=yloc.abovebar, size=size.normal)
+                l_num  := label.new(bar_index - 1, high[1], text=num_str, color=color.new(color.white, 100), textcolor=c_num, style=label.style_label_down, yloc=yloc.abovebar, size=size.normal)
+            else
+                l_time := label.new(bar_index - 1, low[1], text=time_str, color=color.new(color.white, 100), textcolor=c_time, style=label.style_none, yloc=yloc.belowbar, size=size.normal)
+                l_num  := label.new(bar_index - 1, low[1], text=num_str, color=color.new(color.white, 100), textcolor=c_num, style=label.style_label_up, yloc=yloc.belowbar, size=size.normal)
+            
+            array.push(q_lbl_369, l_time)
+            array.push(q_lbl_369, l_num)
+            array.push(q_time_369, time[1])
+            array.push(q_time_369, time[1])
+
+    int cutoff = time - (keep_mins * 60 * 1000)
+    while array.size(q_time_369) > 0 
+        if array.get(q_time_369, 0) < cutoff
+            label.delete(array.shift(q_lbl_369))
+            array.shift(q_time_369)
+        else
+            break 
 else
-    is_valid_369 := false
+    if array.size(q_lbl_369) > 0
+        for i = 0 to array.size(q_lbl_369) - 1
+            label.delete(array.get(q_lbl_369, i))
+        array.clear(q_lbl_369)
+        array.clear(q_time_369)
 
-should_draw = (is_swing and is_valid_369) or (is_swing and show_all_swings)
+get_5_weeks_data() =>
+    a_open = array.from(open, open[1], open[2], open[3], open[4])
+    a_prev_close = array.from(close[1], close[2], close[3], close[4], close[5])
+    a_time = array.from(time, time[1], time[2], time[3], time[4])
+    [a_open, a_prev_close, a_time]
 
-var label[] label_queue = array.new_label()
-var int[]   time_queue  = array.new_int()
+[w_opens, w_prev_closes, w_times] = request.security(syminfo.tickerid, "W", get_5_weeks_data(), lookahead=barmerge.lookahead_on)
 
-if should_draw
-    string str_h = h < 10 ? "0" + str.tostring(h) : str.tostring(h)
-    string str_m = m < 10 ? "0" + str.tostring(m) : str.tostring(m)
-    string current_time_str = str_h + ":" + str_m
-    
-    int display_num = is_valid_369 ? number_369 : (check_min ? final_min_digit : final_total_digit)
-    if na(display_num)
-        int tmp_total = reduce_to_single_digit(calc_digit_sum(m) + calc_digit_sum(h))
-        display_num := tmp_total
+var line[] lines_nwog = array.new_line()
+var label[] labels_nwog = array.new_label()
 
-    string number_str = str.tostring(display_num)
-    
-    color txt_color_time = is_valid_369 ? time_text_color : color.gray
-    color txt_color_num  = is_valid_369 ? number_color : color.gray
-    
-    label lbl_time = na
-    label lbl_num  = na
-    
-    if is_swing_high
-        lbl_time := label.new(bar_index - 1, high[1], text=current_time_str, color=color.new(color.white, 100), textcolor=txt_color_time, style=label.style_none, yloc=yloc.abovebar, size=size.normal)
-        lbl_num  := label.new(bar_index - 1, high[1], text=number_str, color=color.new(color.white, 100), textcolor=txt_color_num, style=label.style_label_down, yloc=yloc.abovebar, size=size.normal)
-    else
-        lbl_time := label.new(bar_index - 1, low[1], text=current_time_str, color=color.new(color.white, 100), textcolor=txt_color_time, style=label.style_none, yloc=yloc.belowbar, size=size.normal)
-        lbl_num  := label.new(bar_index - 1, low[1], text=number_str, color=color.new(color.white, 100), textcolor=txt_color_num, style=label.style_label_up, yloc=yloc.belowbar, size=size.normal)
-    
-    array.push(label_queue, lbl_time)
-    array.push(label_queue, lbl_num)
-    array.push(time_queue, time[1]) 
-    array.push(time_queue, time[1])
+ce_line_style = get_line_style(nwog_ce_st_str)
 
-int cutoff_time = time - (keep_minutes * 60 * 1000)
-while array.size(time_queue) > 0 and array.get(time_queue, 0) < cutoff_time
-    label.delete(array.shift(label_queue))
-    array.shift(time_queue)
+if enable_nwog
+    if barstate.islast
+        while array.size(lines_nwog) > 0
+            line.delete(array.pop(lines_nwog))
+        while array.size(labels_nwog) > 0
+            label.delete(array.pop(labels_nwog))
+
+        int label_rt_x = time + (15 * 60 * 1000)
+
+        for i = 0 to 4
+            float _op = array.get(w_opens, i)
+            float _cl = array.get(w_prev_closes, i)
+            int   _tm = array.get(w_times, i)
+
+            if not na(_op) and not na(_cl) and not na(_tm)
+                l1 = line.new(_tm, _cl, _tm + 1, _cl, xloc.bar_time, extend.right, nwog_l_col, width=1)
+                l2 = line.new(_tm, _op, _tm + 1, _op, xloc.bar_time, extend.right, nwog_l_col, width=1)
+                array.push(lines_nwog, l1)
+                array.push(lines_nwog, l2)
+
+                if nwog_show_ce
+                    float _ce = math.avg(_cl, _op)
+                    l_ce = line.new(x1=_tm, y1=_ce, x2=_tm + 1, y2=_ce, xloc=xloc.bar_time, extend=extend.right, 
+                         color=nwog_ce_col, width=nwog_ce_width, style=ce_line_style)
+                    array.push(lines_nwog, l_ce)
+                
+                string t_str = str.format("NWOG {0}/{1}", dayofmonth(_tm), month(_tm))
+                float  y_pos = math.avg(_cl, _op)
+
+                lb_start = label.new(_tm, y_pos, t_str, xloc.bar_time, yloc.price, color.new(color.white, 100), label.style_label_left, nwog_t_col, size.small)
+                lb_end   = label.new(label_rt_x, y_pos, t_str, xloc.bar_time, yloc.price, color.new(color.white, 100), label.style_label_left, nwog_t_col, size.small)
+                
+                array.push(labels_nwog, lb_start)
+                array.push(labels_nwog, lb_end)
+else
+    if array.size(lines_nwog) > 0
+        while array.size(lines_nwog) > 0
+            line.delete(array.pop(lines_nwog))
+        while array.size(labels_nwog) > 0
+            label.delete(array.pop(labels_nwog))
