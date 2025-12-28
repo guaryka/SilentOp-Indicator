@@ -57,11 +57,6 @@ SilentOp calculates the **Digital Root** (sum of digits reduced to a single numb
 
 ---
 
-## 📸 Screenshots
-
-*(Upload your screenshots to an 'images' folder and link them here)*
----
-
 ## 📦 Installation
 
 1.  Open **TradingView**.
