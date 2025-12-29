@@ -7,7 +7,7 @@ enable_369  = input.bool(true, title="Enable 369", group=grp_369)
 c_time      = input.color(color.red,  title="Time Color", group=grp_369)
 c_num       = input.color(color.lime, title="Number Color", group=grp_369)
 keep_mins   = input.int(10,     title="Keep Signals (Minutes)", minval=1, group=grp_369)
-tz_369      = input.string("UTC+5", title="Timezone", group=grp_369)
+tz_369      = input.string("UTC-5", title="Timezone", group=grp_369)
 
 grp_nwog    = "NWOG Settings"
 enable_nwog = input.bool(true, title="Enable NWOG", group=grp_nwog)
@@ -142,25 +142,21 @@ if enable_nwog
             int   _tm = array.get(w_times, i)
 
             if not na(_op) and not na(_cl) and not na(_tm)
-                l1 = line.new(_tm, _cl, _tm + 1, _cl, xloc.bar_time, extend.right, nwog_l_col, width=1)
-                l2 = line.new(_tm, _op, _tm + 1, _op, xloc.bar_time, extend.right, nwog_l_col, width=1)
+                l1 = line.new(x1=_tm, y1=_cl, x2=_tm + 1, y2=_cl, xloc=xloc.bar_time, extend=extend.right, color=nwog_l_col, width=1)
+                l2 = line.new(x1=_tm, y1=_op, x2=_tm + 1, y2=_op, xloc=xloc.bar_time, extend=extend.right, color=nwog_l_col, width=1)
                 array.push(lines_nwog, l1)
                 array.push(lines_nwog, l2)
 
                 if nwog_show_ce
                     float _ce = math.avg(_cl, _op)
-                    l_ce = line.new(x1=_tm, y1=_ce, x2=_tm + 1, y2=_ce, xloc=xloc.bar_time, extend=extend.right, 
-                         color=nwog_ce_col, width=nwog_ce_width, style=ce_line_style)
+                    l_ce = line.new(x1=_tm, y1=_ce, x2=_tm + 1, y2=_ce, xloc=xloc.bar_time, extend=extend.right, color=nwog_ce_col, width=nwog_ce_width, style=ce_line_style)
                     array.push(lines_nwog, l_ce)
                 
                 string t_str = str.format("NWOG {0}/{1}", dayofmonth(_tm), month(_tm))
                 float  y_pos = math.avg(_cl, _op)
 
-                lb_start = label.new(_tm, y_pos, t_str, xloc.bar_time, yloc.price, color.new(color.white, 100), label.style_label_left, nwog_t_col, size.small)
-                lb_end   = label.new(label_rt_x, y_pos, t_str, xloc.bar_time, yloc.price, color.new(color.white, 100), label.style_label_left, nwog_t_col, size.small)
-                
-                array.push(labels_nwog, lb_start)
-                array.push(labels_nwog, lb_end)
+                lb_floating = label.new(x=label_rt_x, y=y_pos, text=t_str, xloc=xloc.bar_time, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_left, textcolor=nwog_t_col, size=size.small)
+                array.push(labels_nwog, lb_floating)
 else
     if array.size(lines_nwog) > 0
         while array.size(lines_nwog) > 0
